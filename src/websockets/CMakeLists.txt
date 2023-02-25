@@ -19,11 +19,13 @@ qt_internal_add_module(WebSockets
         qwebsocketserver.cpp qwebsocketserver.h qwebsocketserver_p.cpp qwebsocketserver_p.h
     LIBRARIES
         Qt::CorePrivate
+        Qt::NetworkPrivate
     PUBLIC_LIBRARIES
         Qt::Core
         Qt::Network
     PRIVATE_MODULE_INTERFACE
         Qt::CorePrivate
+    GENERATE_CPP_EXPORTS
 )
 
 #### Keys ignored in scope 1:.:.:websockets.pro:<TRUE>:
