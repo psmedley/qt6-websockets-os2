@@ -1,41 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 Kurt Pattyn <pattyn.kurt@gmail.com>.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtWebSockets module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 3 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL3 included in the
-** packaging of this file. Please review the following information to
-** ensure the GNU Lesser General Public License version 3 requirements
-** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 2.0 or (at your option) the GNU General
-** Public license version 3 or any later version approved by the KDE Free
-** Qt Foundation. The licenses are as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-2.0.html and
-** https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 Kurt Pattyn <pattyn.kurt@gmail.com>.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include "qwebsocket.h"
 #include "qwebsocket_p.h"
@@ -77,6 +41,40 @@ constexpr int MAX_HEADERLINE_LENGTH = 8 * 1024; // maximum length of a http requ
 constexpr int MAX_HEADERLINES = 100;            // maximum number of http request header lines
 constexpr quint64 MAX_OUTGOING_FRAME_SIZE_IN_BYTES = std::numeric_limits<int>::max() - 1;
 constexpr quint64 DEFAULT_OUTGOING_FRAME_SIZE_IN_BYTES = 512 * 512 * 2; // default size of a frame when sending a message
+
+// Based on isSeperator() from qtbase/src/network/access/qhsts.cpp
+// https://datatracker.ietf.org/doc/html/rfc2616#section-2.2:
+//
+//     separators = "(" | ")" | "<" | ">" | "@"
+//                | "," | ";" | ":" | "\" | <">
+//                | "/" | "[" | "]" | "?" | "="
+//                | "{" | "}" | SP | HT
+// TODO: Should probably make things like this re-usable as private API of QtNetwork
+bool isSeparator(char c)
+{
+    // separators     = "(" | ")" | "<" | ">" | "@"
+    //                      | "," | ";" | ":" | "\" | <">
+    //                      | "/" | "[" | "]" | "?" | "="
+    //                      | "{" | "}" | SP | HT
+    static const char separators[] = "()<>@,;:\\\"/[]?={} \t";
+    static const char *end = separators + sizeof separators - 1;
+    return std::find(separators, end, c) != end;
+}
+
+// https://datatracker.ietf.org/doc/html/rfc6455#section-4.1:
+// 10.  The request MAY include a header field with the name
+//      |Sec-WebSocket-Protocol|.  If present, this value indicates one
+//      or more comma-separated subprotocol the client wishes to speak,
+//      ordered by preference.  The elements that comprise this value
+//      MUST be non-empty strings with characters in the range U+0021 to
+//      U+007E not including separator characters as defined in
+//      [RFC2616] and MUST all be unique strings.
+bool isValidSubProtocolName(const QString &protocol)
+{
+    return std::all_of(protocol.begin(), protocol.end(), [](const QChar &c) {
+        return c.unicode() >= 0x21 && c.unicode() <= 0x7E && !isSeparator(c.toLatin1());
+    });
+}
 
 }
 
@@ -320,6 +318,24 @@ void QWebSocketPrivate::_q_updateSslConfiguration()
 
 #endif
 
+QStringList QWebSocketPrivate::requestedSubProtocols() const
+{
+    auto subprotocolsRequestedInRawHeader = [this]() {
+        QStringList protocols;
+        QByteArray rawProtocols = m_request.rawHeader("Sec-WebSocket-Protocol");
+        QLatin1StringView rawProtocolsView(rawProtocols);
+        const QStringList &optionsProtocols = m_options.subprotocols();
+        for (auto &&entry : rawProtocolsView.tokenize(u',', Qt::SkipEmptyParts)) {
+            if (QLatin1StringView trimmed = entry.trimmed(); !trimmed.isEmpty()) {
+                if (!optionsProtocols.contains(trimmed))
+                    protocols << trimmed;
+            }
+        }
+        return protocols;
+    };
+    return m_options.subprotocols() + subprotocolsRequestedInRawHeader();
+}
+
 /*!
   Called from QWebSocketServer
   \internal
@@ -339,9 +355,12 @@ QWebSocket *QWebSocketPrivate::upgradeFrom(QTcpSocket *pTcpSocket,
         if (QSslSocket *sslSock = qobject_cast<QSslSocket *>(pTcpSocket))
             pWebSocket->setSslConfiguration(sslSock->sslConfiguration());
 #endif
+        QWebSocketHandshakeOptions options;
+        options.setSubprotocols(request.protocols());
+
         pWebSocket->d_func()->setExtension(response.acceptedExtension());
         pWebSocket->d_func()->setOrigin(request.origin());
-        pWebSocket->d_func()->setRequest(netRequest);
+        pWebSocket->d_func()->setRequest(netRequest, options);
         pWebSocket->d_func()->setProtocol(response.acceptedProtocol());
         pWebSocket->d_func()->setResourceName(request.requestUrl().toString(QUrl::RemoveUserInfo));
         //a server should not send masked frames
@@ -379,7 +398,7 @@ void QWebSocketPrivate::close(QWebSocketProtocol::CloseCode closeCode, QString r
         QByteArray frame = getFrameHeader(QWebSocketProtocol::OpCodeClose,
                                           quint64(payload.size()), maskingKey, true);
 
-        Q_ASSERT(payload.length() <= 125);
+        Q_ASSERT(payload.size() <= 125);
         frame.append(payload);
         m_pSocket->write(frame);
         m_pSocket->flush();
@@ -394,7 +413,8 @@ void QWebSocketPrivate::close(QWebSocketProtocol::CloseCode closeCode, QString r
 /*!
     \internal
  */
-void QWebSocketPrivate::open(const QNetworkRequest &request, bool mask)
+void QWebSocketPrivate::open(const QNetworkRequest &request,
+                             const QWebSocketHandshakeOptions &options, bool mask)
 {
     //just delete the old socket for the moment;
     //later, we can add more 'intelligent' handling by looking at the URL
@@ -417,7 +437,7 @@ void QWebSocketPrivate::open(const QNetworkRequest &request, bool mask)
         m_isClosingHandshakeReceived = false;
         m_isClosingHandshakeSent = false;
 
-        setRequest(request);
+        setRequest(request, options);
         QString resourceName = url.path(QUrl::FullyEncoded);
         // Check for encoded \r\n
         if (resourceName.contains(QStringLiteral("%0D%0A"))) {
@@ -553,10 +573,13 @@ void QWebSocketPrivate::setResourceName(const QString &resourceName)
 /*!
   \internal
  */
-void QWebSocketPrivate::setRequest(const QNetworkRequest &request)
+void QWebSocketPrivate::setRequest(const QNetworkRequest &request,
+                                   const QWebSocketHandshakeOptions &options)
 {
     if (m_request != request)
         m_request = request;
+    if (m_options != options)
+        m_options = options;
 }
 
 /*!
@@ -716,6 +739,14 @@ QNetworkRequest QWebSocketPrivate::request() const
 QString QWebSocketPrivate::origin() const
 {
     return m_origin;
+}
+
+/*!
+    \internal
+ */
+QWebSocketHandshakeOptions QWebSocketPrivate::handshakeOptions() const
+{
+    return m_options;
 }
 
 /*!
@@ -988,9 +1019,17 @@ void QWebSocketPrivate::processHandshake(QTcpSocket *pSocket)
 #if 0 // unused for the moment
     const QString extensions = QString::fromLatin1(parser.combinedHeaderValue(
                                 QByteArrayLiteral("sec-websocket-extensions"));
-    const QString protocol = QString::fromLatin1(parser.combinedHeaderValue(
-                                QByteArrayLiteral("sec-websocket-protocol"));
 #endif
+    const QString protocol = QString::fromLatin1(parser.combinedHeaderValue(
+                                QByteArrayLiteral("sec-websocket-protocol")));
+    if (!protocol.isEmpty() && !requestedSubProtocols().contains(protocol)) {
+        setErrorString(QWebSocket::tr("WebSocket server has chosen protocol %1 which has not been "
+                                      "requested")
+                               .arg(protocol));
+        Q_EMIT q->error(QAbstractSocket::ConnectionRefusedError);
+        return;
+    }
+
     const QString version = QString::fromLatin1(parser.combinedHeaderValue(
                                 QByteArrayLiteral("sec-websocket-version")));
     bool ok = false;
@@ -1012,9 +1051,12 @@ void QWebSocketPrivate::processHandshake(QTcpSocket *pSocket)
                             .arg(acceptKey, accept);
             }
         } else {
+            const QString upgradeParms = QLatin1String(
+                    "Accept-key size: %1, version: %2.%3, upgrade: %4, connection: %5").arg(
+                    QString::number(acceptKey.size()), QString::number(parser.getMajorVersion()),
+                    QString::number(parser.getMinorVersion()), upgrade, connection);
             errorDescription = QWebSocket::tr(
-                "QWebSocketPrivate::processHandshake: Invalid status line in response: %1.")
-                    .arg(QString::fromLatin1(m_statusLine));
+                "Invalid parameter(s) presented during protocol upgrade: %1").arg(upgradeParms);
         }
     } else if (parser.getStatusCode() == 400) {
         //HTTP/1.1 400 Bad Request
@@ -1038,11 +1080,12 @@ void QWebSocketPrivate::processHandshake(QTcpSocket *pSocket)
     } else {
         errorDescription =
             QWebSocket::tr("QWebSocketPrivate::processHandshake: Unhandled http status code: %1 (%2).")
-                    .arg(m_httpStatusCode).arg(m_httpStatusMessage);
+                    .arg(parser.getStatusCode()).arg(parser.getReasonPhrase());
     }
 
     if (ok) {
         // handshake succeeded
+        setProtocol(protocol);
         setSocketState(QAbstractSocket::ConnectedState);
         Q_EMIT q->connected();
     } else {
@@ -1072,9 +1115,14 @@ void QWebSocketPrivate::processStateChanged(QAbstractSocket::SocketState socketS
 
             QList<QPair<QString, QString> > headers;
             const auto headerList = m_request.rawHeaderList();
-            for (const QByteArray &key : headerList)
+            for (const QByteArray &key : headerList) {
+                // protocols handled separately below
+                if (key.compare("Sec-WebSocket-Protocol", Qt::CaseInsensitive) == 0)
+                    continue;
                 headers << qMakePair(QString::fromLatin1(key),
                                      QString::fromLatin1(m_request.rawHeader(key)));
+            }
+            const QStringList subProtocols = requestedSubProtocols();
 
             const auto format = QUrl::RemoveScheme | QUrl::RemoveUserInfo
                                 | QUrl::RemovePath | QUrl::RemoveQuery
@@ -1084,7 +1132,7 @@ void QWebSocketPrivate::processStateChanged(QAbstractSocket::SocketState socketS
                                                              host,
                                                              origin(),
                                                              QString(),
-                                                             QString(),
+                                                             subProtocols,
                                                              m_key,
                                                              headers);
             if (handshake.isEmpty()) {
@@ -1192,7 +1240,7 @@ QString QWebSocketPrivate::createHandShakeRequest(QString resourceName,
                                                   QString host,
                                                   QString origin,
                                                   QString extensions,
-                                                  QString protocols,
+                                                  const QStringList &protocols,
                                                   QByteArray key,
                                                   const QList<QPair<QString, QString> > &headers)
 {
@@ -1217,11 +1265,6 @@ QString QWebSocketPrivate::createHandShakeRequest(QString resourceName,
                                       "Possible attack detected."));
         return QString();
     }
-    if (protocols.contains(QStringLiteral("\r\n"))) {
-        setErrorString(QWebSocket::tr("The protocols attribute contains newlines. " \
-                                      "Possible attack detected."));
-        return QString();
-    }
 
     handshakeRequest << QStringLiteral("GET ") % resourceName % QStringLiteral(" HTTP/1.1") <<
                         QStringLiteral("Host: ") % host <<
@@ -1232,10 +1275,26 @@ QString QWebSocketPrivate::createHandShakeRequest(QString resourceName,
         handshakeRequest << QStringLiteral("Origin: ") % origin;
     handshakeRequest << QStringLiteral("Sec-WebSocket-Version: ")
                             % QString::number(QWebSocketProtocol::currentVersion());
-    if (extensions.length() > 0)
+    if (extensions.size() > 0)
         handshakeRequest << QStringLiteral("Sec-WebSocket-Extensions: ") % extensions;
-    if (protocols.length() > 0)
-        handshakeRequest << QStringLiteral("Sec-WebSocket-Protocol: ") % protocols;
+
+    const QStringList validProtocols = [&] {
+        QStringList validProtocols;
+        validProtocols.reserve(protocols.size());
+        for (const auto &p : protocols) {
+            if (isValidSubProtocolName(p))
+                validProtocols.append(p);
+            else
+                qWarning() << "Ignoring invalid WebSocket subprotocol name" << p;
+        }
+
+        return validProtocols;
+    }();
+
+    if (!validProtocols.isEmpty()) {
+        handshakeRequest << QStringLiteral("Sec-WebSocket-Protocol: ")
+                                % validProtocols.join(QLatin1String(", "));
+    }
 
     for (const auto &header : headers)
         handshakeRequest << header.first % QStringLiteral(": ") % header.second;

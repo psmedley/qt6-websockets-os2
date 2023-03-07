@@ -1,30 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 Kurt Pattyn <pattyn.kurt@gmail.com>.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the test suite of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:GPL-EXCEPT$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3 as published by the Free Software
-** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 Kurt Pattyn <pattyn.kurt@gmail.com>.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR GPL-3.0-only WITH Qt-GPL-exception-1.0
 #include <QtTest/QtTest>
 #include <QtTest/qtestcase.h>
 #include <QtCore/QDebug>
@@ -100,30 +75,30 @@ void tst_HandshakeRequest::tst_initialization()
         QCOMPARE(request.port(), 0);
         QVERIFY(!request.isSecure());
         QVERIFY(!request.isValid());
-        QCOMPARE(request.extensions().length(), 0);
-        QCOMPARE(request.protocols().length(), 0);
+        QCOMPARE(request.extensions().size(), 0);
+        QCOMPARE(request.protocols().size(), 0);
         QCOMPARE(request.headers().size(), 0);
-        QCOMPARE(request.key().length(), 0);
-        QCOMPARE(request.origin().length(), 0);
-        QCOMPARE(request.host().length(), 0);
+        QCOMPARE(request.key().size(), 0);
+        QCOMPARE(request.origin().size(), 0);
+        QCOMPARE(request.host().size(), 0);
         QVERIFY(request.requestUrl().isEmpty());
-        QCOMPARE(request.resourceName().length(), 0);
-        QCOMPARE(request.versions().length(), 0);
+        QCOMPARE(request.resourceName().size(), 0);
+        QCOMPARE(request.versions().size(), 0);
     }
     {
         QWebSocketHandshakeRequest request(80, true);
         QCOMPARE(request.port(), 80);
         QVERIFY(request.isSecure());
         QVERIFY(!request.isValid());
-        QCOMPARE(request.extensions().length(), 0);
-        QCOMPARE(request.protocols().length(), 0);
+        QCOMPARE(request.extensions().size(), 0);
+        QCOMPARE(request.protocols().size(), 0);
         QCOMPARE(request.headers().size(), 0);
-        QCOMPARE(request.key().length(), 0);
-        QCOMPARE(request.origin().length(), 0);
-        QCOMPARE(request.host().length(), 0);
+        QCOMPARE(request.key().size(), 0);
+        QCOMPARE(request.origin().size(), 0);
+        QCOMPARE(request.host().size(), 0);
         QVERIFY(request.requestUrl().isEmpty());
-        QCOMPARE(request.resourceName().length(), 0);
-        QCOMPARE(request.versions().length(), 0);
+        QCOMPARE(request.resourceName().size(), 0);
+        QCOMPARE(request.versions().size(), 0);
     }
     {
         QWebSocketHandshakeRequest request(80, true);
@@ -131,15 +106,15 @@ void tst_HandshakeRequest::tst_initialization()
         QCOMPARE(request.port(), 80);
         QVERIFY(request.isSecure());
         QVERIFY(!request.isValid());
-        QCOMPARE(request.extensions().length(), 0);
-        QCOMPARE(request.protocols().length(), 0);
+        QCOMPARE(request.extensions().size(), 0);
+        QCOMPARE(request.protocols().size(), 0);
         QCOMPARE(request.headers().size(), 0);
-        QCOMPARE(request.key().length(), 0);
-        QCOMPARE(request.origin().length(), 0);
-        QCOMPARE(request.host().length(), 0);
+        QCOMPARE(request.key().size(), 0);
+        QCOMPARE(request.origin().size(), 0);
+        QCOMPARE(request.host().size(), 0);
         QVERIFY(request.requestUrl().isEmpty());
-        QCOMPARE(request.resourceName().length(), 0);
-        QCOMPARE(request.versions().length(), 0);
+        QCOMPARE(request.resourceName().size(), 0);
+        QCOMPARE(request.versions().size(), 0);
     }
 }
 
@@ -220,15 +195,15 @@ void tst_HandshakeRequest::tst_invalidStream()
     QVERIFY(!request.isValid());
     QCOMPARE(request.port(), 80);
     QVERIFY(request.isSecure());
-    QCOMPARE(request.extensions().length(), 0);
-    QCOMPARE(request.protocols().length(), 0);
+    QCOMPARE(request.extensions().size(), 0);
+    QCOMPARE(request.protocols().size(), 0);
     QCOMPARE(request.headers().size(), 0);
-    QCOMPARE(request.key().length(), 0);
-    QCOMPARE(request.origin().length(), 0);
-    QCOMPARE(request.host().length(), 0);
+    QCOMPARE(request.key().size(), 0);
+    QCOMPARE(request.origin().size(), 0);
+    QCOMPARE(request.host().size(), 0);
     QVERIFY(request.requestUrl().isEmpty());
-    QCOMPARE(request.resourceName().length(), 0);
-    QCOMPARE(request.versions().length(), 0);
+    QCOMPARE(request.resourceName().size(), 0);
+    QCOMPARE(request.versions().size(), 0);
 }
 
 /*
@@ -253,15 +228,15 @@ void tst_HandshakeRequest::tst_multipleValuesInConnectionHeader()
     QVERIFY(request.isValid());
     QCOMPARE(request.port(), 80);
     QVERIFY(!request.isSecure());
-    QCOMPARE(request.extensions().length(), 0);
-    QCOMPARE(request.protocols().length(), 0);
+    QCOMPARE(request.extensions().size(), 0);
+    QCOMPARE(request.protocols().size(), 0);
     QCOMPARE(request.headers().size(), 5);
-    QCOMPARE(request.key().length(), 9);
-    QCOMPARE(request.origin().length(), 0);
+    QCOMPARE(request.key().size(), 9);
+    QCOMPARE(request.origin().size(), 0);
     QCOMPARE(request.requestUrl(), QUrl("ws://foo.com/test"));
     QCOMPARE(request.host(), QStringLiteral("foo.com"));
-    QCOMPARE(request.resourceName().length(), 5);
-    QCOMPARE(request.versions().length(), 1);
+    QCOMPARE(request.resourceName().size(), 5);
+    QCOMPARE(request.versions().size(), 1);
     QCOMPARE(request.versions().at(0), QWebSocketProtocol::Version13);
 }
 
@@ -286,7 +261,7 @@ void tst_HandshakeRequest::tst_parsingWhitespaceInHeaders()
 
     QVERIFY(request.isValid());
     QCOMPARE(request.key(), QStringLiteral("AVD FBDDFF"));
-    QCOMPARE(request.versions().length(), 1);
+    QCOMPARE(request.versions().size(), 1);
     QCOMPARE(request.versions().at(0), QWebSocketProtocol::Version13);
 }
 
@@ -305,8 +280,8 @@ void tst_HandshakeRequest::tst_multipleVersions()
     QVERIFY(request.isValid());
     QCOMPARE(request.port(), 80);
     QVERIFY(!request.isSecure());
-    QCOMPARE(request.extensions().length(), 0);
-    QCOMPARE(request.protocols().length(), 0);
+    QCOMPARE(request.extensions().size(), 0);
+    QCOMPARE(request.protocols().size(), 0);
     QCOMPARE(request.headers().size(), 5);
     QVERIFY(request.hasHeader("host"));
     QVERIFY(request.hasHeader("sec-websocket-version"));
@@ -314,11 +289,11 @@ void tst_HandshakeRequest::tst_multipleVersions()
     QVERIFY(request.hasHeader("upgrade"));
     QVERIFY(request.hasHeader("connection"));
     QCOMPARE(request.key(), QStringLiteral("AVDFBDDFF"));
-    QCOMPARE(request.origin().length(), 0);
+    QCOMPARE(request.origin().size(), 0);
     QCOMPARE(request.requestUrl(), QUrl("ws://foo.com/test"));
     QCOMPARE(request.host(), QStringLiteral("foo.com"));
-    QCOMPARE(request.resourceName().length(), 5);
-    QCOMPARE(request.versions().length(), 6);
+    QCOMPARE(request.resourceName().size(), 5);
+    QCOMPARE(request.versions().size(), 6);
     //should be 13 since the list is ordered in decreasing order
     QCOMPARE(request.versions().at(0), QWebSocketProtocol::Version13);
 }
@@ -370,7 +345,7 @@ void tst_HandshakeRequest::tst_qtbug_48123_data()
     QString legalHeader = header;
     const QString headerKey = QStringLiteral("X-CUSTOM-KEY: ");
     legalHeader.append(headerKey);
-    legalHeader.append(QString(MAX_HEADERLINE_LENGTH - headerKey.length(), QLatin1Char('c')));
+    legalHeader.append(QString(MAX_HEADERLINE_LENGTH - headerKey.size(), QLatin1Char('c')));
     legalHeader.append(QStringLiteral("\r\n\r\n"));
 
     QTest::newRow("headerline with maximum length") << legalHeader << true;

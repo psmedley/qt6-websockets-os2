@@ -1,41 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 Kurt Pattyn <pattyn.kurt@gmail.com>.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtWebSockets module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 3 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL3 included in the
-** packaging of this file. Please review the following information to
-** ensure the GNU Lesser General Public License version 3 requirements
-** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 2.0 or (at your option) the GNU General
-** Public license version 3 or any later version approved by the KDE Free
-** Qt Foundation. The licenses are as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-2.0.html and
-** https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 Kurt Pattyn <pattyn.kurt@gmail.com>.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 /*!
     \class QWebSocket
@@ -52,9 +16,7 @@
 
     This class was modeled after QAbstractSocket.
 
-    QWebSocket currently does not support
-    \l {WebSocket Extensions} and
-    \l {WebSocket Subprotocols}.
+    QWebSocket currently does not support \l {WebSocket Extensions}.
 
     QWebSocket only supports version 13 of the WebSocket protocol, as outlined in
     \l {RFC 6455}.
@@ -332,6 +294,7 @@ not been filled in with new information when the signal returns.
   */
 #include "qwebsocket.h"
 #include "qwebsocket_p.h"
+#include "qwebsockethandshakeoptions.h"
 
 #include <QtCore/QUrl>
 #include <QtNetwork/QTcpSocket>
@@ -484,7 +447,7 @@ void QWebSocket::open(const QUrl &url)
 {
     Q_D(QWebSocket);
     QNetworkRequest request(url);
-    d->open(request, true);
+    d->open(request, QWebSocketHandshakeOptions{}, true);
 }
 
 /*!
@@ -498,7 +461,41 @@ void QWebSocket::open(const QUrl &url)
 void QWebSocket::open(const QNetworkRequest &request)
 {
     Q_D(QWebSocket);
-    d->open(request, true);
+    d->open(request, QWebSocketHandshakeOptions{}, true);
+}
+
+/*!
+    \brief Opens a WebSocket connection using the given \a url and \a options.
+    \since 6.4
+
+    If the url contains newline characters (\\r\\n), then the error signal will be emitted
+    with QAbstractSocket::ConnectionRefusedError as error type.
+
+    Additional options for the WebSocket handshake such as subprotocols can be specified in
+    \a options.
+ */
+void QWebSocket::open(const QUrl &url, const QWebSocketHandshakeOptions &options)
+{
+    Q_D(QWebSocket);
+    QNetworkRequest request(url);
+    d->open(request, options, true);
+}
+
+/*!
+    \brief Opens a WebSocket connection using the given \a request and \a options.
+    \since 6.4
+
+    The \a request url will be used to open the WebSocket connection.
+    Headers present in the request will be sent to the server in the upgrade request,
+    together with the ones needed for the websocket handshake.
+
+    Additional options for the WebSocket handshake such as subprotocols can be specified in
+    \a options.
+ */
+void QWebSocket::open(const QNetworkRequest &request, const QWebSocketHandshakeOptions &options)
+{
+    Q_D(QWebSocket);
+    d->open(request, options, true);
 }
 
 /*!
@@ -654,12 +651,32 @@ QNetworkRequest QWebSocket::request() const
 }
 
 /*!
+    \brief Returns the handshake options that were used to open this socket.
+    \since 6.4
+ */
+QWebSocketHandshakeOptions QWebSocket::handshakeOptions() const
+{
+    Q_D(const QWebSocket);
+    return d->handshakeOptions();
+}
+
+/*!
     \brief Returns the current origin.
  */
 QString QWebSocket::origin() const
 {
     Q_D(const QWebSocket);
     return d->origin();
+}
+
+/*!
+    \brief Returns the used WebSocket protocol.
+    \since 6.4
+ */
+QString QWebSocket::subprotocol() const
+{
+    Q_D(const QWebSocket);
+    return d->protocol();
 }
 
 /*!

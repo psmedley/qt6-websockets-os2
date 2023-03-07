@@ -1,33 +1,11 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 Kurt Pattyn <pattyn.kurt@gmail.com>.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the test suite of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:GPL-EXCEPT$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3 as published by the Free Software
-** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 Kurt Pattyn <pattyn.kurt@gmail.com>.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR GPL-3.0-only WITH Qt-GPL-exception-1.0
+#include <QRegularExpression>
 #include <QString>
 #include <QtTest>
 #include <QtWebSockets/QWebSocket>
+#include <QtWebSockets/QWebSocketHandshakeOptions>
+#include <QtWebSockets/QWebSocketCorsAuthenticator>
 #include <QtWebSockets/QWebSocketServer>
 #include <QtWebSockets/qwebsocketprotocol.h>
 
@@ -36,6 +14,8 @@
 QT_USE_NAMESPACE
 
 Q_DECLARE_METATYPE(QWebSocketProtocol::Version)
+
+using namespace Qt::StringLiterals;
 
 class EchoServer : public QObject
 {
@@ -52,6 +32,7 @@ public:
 Q_SIGNALS:
     void newConnection(QUrl requestUrl);
     void newConnection(QNetworkRequest request);
+    void originAuthenticationRequired(QWebSocketCorsAuthenticator* pAuthenticator);
 
 private Q_SLOTS:
     void onNewConnection();
@@ -74,9 +55,13 @@ EchoServer::EchoServer(QObject *parent, quint64 maxAllowedIncomingMessageSize, q
     m_maxAllowedIncomingFrameSize(maxAllowedIncomingFrameSize),
     m_clients()
 {
+    m_pWebSocketServer->setSupportedSubprotocols({ QStringLiteral("protocol1"),
+                                                QStringLiteral("protocol2") });
     if (m_pWebSocketServer->listen(QHostAddress(QStringLiteral("127.0.0.1")))) {
         connect(m_pWebSocketServer, SIGNAL(newConnection()),
                 this, SLOT(onNewConnection()));
+        connect(m_pWebSocketServer, &QWebSocketServer::originAuthenticationRequired,
+                this, &EchoServer::originAuthenticationRequired);
     }
 }
 
@@ -148,7 +133,11 @@ private Q_SLOTS:
     void tst_sendTextMessage();
     void tst_sendBinaryMessage();
     void tst_errorString();
+    void tst_openRequest_data();
     void tst_openRequest();
+    void tst_protocolAccessor();
+    void protocolsHeaderGeneration_data();
+    void protocolsHeaderGeneration();
     void tst_moveToThread();
     void tst_moveToThreadNoWarning();
 #ifndef QT_NO_NETWORKPROXY
@@ -327,17 +316,17 @@ void tst_QWebSocket::tst_invalidOpen()
     QCOMPARE(socket.sendTextMessage(QStringLiteral("A text message")), 0);
     QCOMPARE(socket.sendBinaryMessage(QByteArrayLiteral("A text message")), 0);
 
-    if (errorSpy.count() == 0)
+    if (errorSpy.size() == 0)
         QVERIFY(errorSpy.wait());
-    QCOMPARE(errorSpy.count(), 1);
+    QCOMPARE(errorSpy.size(), 1);
     QList<QVariant> arguments = errorSpy.takeFirst();
     QAbstractSocket::SocketError socketError =
             qvariant_cast<QAbstractSocket::SocketError>(arguments.at(0));
     QCOMPARE(socketError, QAbstractSocket::ConnectionRefusedError);
-    QCOMPARE(aboutToCloseSpy.count(), 0);
-    QCOMPARE(connectedSpy.count(), 0);
-    QCOMPARE(disconnectedSpy.count(), disconnectedCount);
-    QCOMPARE(stateChangedSpy.count(), stateChangedCount);
+    QCOMPARE(aboutToCloseSpy.size(), 0);
+    QCOMPARE(connectedSpy.size(), 0);
+    QCOMPARE(disconnectedSpy.size(), disconnectedCount);
+    QCOMPARE(stateChangedSpy.size(), stateChangedCount);
     if (stateChangedCount == 2) {
         arguments = stateChangedSpy.takeFirst();
         QAbstractSocket::SocketState socketState =
@@ -346,13 +335,13 @@ void tst_QWebSocket::tst_invalidOpen()
         socketState = qvariant_cast<QAbstractSocket::SocketState>(arguments.at(0));
         QCOMPARE(socketState, QAbstractSocket::UnconnectedState);
     }
-    QCOMPARE(readChannelFinishedSpy.count(), 0);
-    QCOMPARE(textFrameReceivedSpy.count(), 0);
-    QCOMPARE(binaryFrameReceivedSpy.count(), 0);
-    QCOMPARE(textMessageReceivedSpy.count(), 0);
-    QCOMPARE(binaryMessageReceivedSpy.count(), 0);
-    QCOMPARE(pongSpy.count(), 0);
-    QCOMPARE(bytesWrittenSpy.count(), 0);
+    QCOMPARE(readChannelFinishedSpy.size(), 0);
+    QCOMPARE(textFrameReceivedSpy.size(), 0);
+    QCOMPARE(binaryFrameReceivedSpy.size(), 0);
+    QCOMPARE(textMessageReceivedSpy.size(), 0);
+    QCOMPARE(binaryMessageReceivedSpy.size(), 0);
+    QCOMPARE(pongSpy.size(), 0);
+    QCOMPARE(bytesWrittenSpy.size(), 0);
 }
 
 void tst_QWebSocket::tst_invalidOrigin()
@@ -393,28 +382,28 @@ void tst_QWebSocket::tst_invalidOrigin()
 
     QVERIFY(errorSpy.wait());
 
-    QCOMPARE(errorSpy.count(), 1);
+    QCOMPARE(errorSpy.size(), 1);
     QList<QVariant> arguments = errorSpy.takeFirst();
     QAbstractSocket::SocketError socketError =
             qvariant_cast<QAbstractSocket::SocketError>(arguments.at(0));
     QCOMPARE(socketError, QAbstractSocket::ConnectionRefusedError);
-    QCOMPARE(aboutToCloseSpy.count(), 0);
-    QCOMPARE(connectedSpy.count(), 0);
-    QCOMPARE(disconnectedSpy.count(), 1);
-    QCOMPARE(stateChangedSpy.count(), 2);   //connectingstate, unconnectedstate
+    QCOMPARE(aboutToCloseSpy.size(), 0);
+    QCOMPARE(connectedSpy.size(), 0);
+    QCOMPARE(disconnectedSpy.size(), 1);
+    QCOMPARE(stateChangedSpy.size(), 2);   //connectingstate, unconnectedstate
     arguments = stateChangedSpy.takeFirst();
     QAbstractSocket::SocketState socketState =
             qvariant_cast<QAbstractSocket::SocketState>(arguments.at(0));
     arguments = stateChangedSpy.takeFirst();
     socketState = qvariant_cast<QAbstractSocket::SocketState>(arguments.at(0));
     QCOMPARE(socketState, QAbstractSocket::UnconnectedState);
-    QCOMPARE(readChannelFinishedSpy.count(), 0);
-    QCOMPARE(textFrameReceivedSpy.count(), 0);
-    QCOMPARE(binaryFrameReceivedSpy.count(), 0);
-    QCOMPARE(textMessageReceivedSpy.count(), 0);
-    QCOMPARE(binaryMessageReceivedSpy.count(), 0);
-    QCOMPARE(pongSpy.count(), 0);
-    QCOMPARE(bytesWrittenSpy.count(), 0);
+    QCOMPARE(readChannelFinishedSpy.size(), 0);
+    QCOMPARE(textFrameReceivedSpy.size(), 0);
+    QCOMPARE(binaryFrameReceivedSpy.size(), 0);
+    QCOMPARE(textMessageReceivedSpy.size(), 0);
+    QCOMPARE(binaryMessageReceivedSpy.size(), 0);
+    QCOMPARE(pongSpy.size(), 0);
+    QCOMPARE(bytesWrittenSpy.size(), 0);
 }
 
 void tst_QWebSocket::tst_sendTextMessage()
@@ -443,8 +432,8 @@ void tst_QWebSocket::tst_sendTextMessage()
 
     socket.open(url);
 
-    QTRY_COMPARE(socketConnectedSpy.count(), 1);
-    QCOMPARE(socketError.count(), 0);
+    QTRY_COMPARE(socketConnectedSpy.size(), 1);
+    QCOMPARE(socketError.size(), 0);
     QCOMPARE(socket.state(), QAbstractSocket::ConnectedState);
     QList<QVariant> arguments = serverConnectedSpy.takeFirst();
     QUrl urlConnected = arguments.at(0).toUrl();
@@ -457,14 +446,14 @@ void tst_QWebSocket::tst_sendTextMessage()
     QVERIFY(textMessageReceived.wait(500));
     QCOMPARE(socket.bytesToWrite(), 0);
 
-    QCOMPARE(textMessageReceived.count(), 1);
-    QCOMPARE(binaryMessageReceived.count(), 0);
-    QCOMPARE(binaryFrameReceived.count(), 0);
+    QCOMPARE(textMessageReceived.size(), 1);
+    QCOMPARE(binaryMessageReceived.size(), 0);
+    QCOMPARE(binaryFrameReceived.size(), 0);
     arguments = textMessageReceived.takeFirst();
     QString messageReceived = arguments.at(0).toString();
     QCOMPARE(messageReceived, QStringLiteral("Hello world!"));
 
-    QCOMPARE(textFrameReceived.count(), 1);
+    QCOMPARE(textFrameReceived.size(), 1);
     arguments = textFrameReceived.takeFirst();
     QString frameReceived = arguments.at(0).toString();
     bool isLastFrame = arguments.at(1).toBool();
@@ -479,8 +468,8 @@ void tst_QWebSocket::tst_sendTextMessage()
     // QTBUG-74464 QWebsocket doesn't receive text (binary) message with size > 32 kb
     socket.open(url);
 
-    QTRY_COMPARE(socketConnectedSpy.count(), 1);
-    QCOMPARE(socketError.count(), 0);
+    QTRY_COMPARE(socketConnectedSpy.size(), 1);
+    QCOMPARE(socketError.size(), 0);
     QCOMPARE(socket.state(), QAbstractSocket::ConnectedState);
     arguments = serverConnectedSpy.takeFirst();
     urlConnected = arguments.at(0).toUrl();
@@ -490,16 +479,16 @@ void tst_QWebSocket::tst_sendTextMessage()
     // transmit a long text message with 1 MB
     QString longString(0x100000, 'a');
     socket.sendTextMessage(longString);
-    QVERIFY(socket.bytesToWrite() > longString.length());
+    QVERIFY(socket.bytesToWrite() > longString.size());
     QVERIFY(textMessageReceived.wait());
     QCOMPARE(socket.bytesToWrite(), 0);
 
-    QCOMPARE(textMessageReceived.count(), 1);
-    QCOMPARE(binaryMessageReceived.count(), 0);
-    QCOMPARE(binaryFrameReceived.count(), 0);
+    QCOMPARE(textMessageReceived.size(), 1);
+    QCOMPARE(binaryMessageReceived.size(), 0);
+    QCOMPARE(binaryFrameReceived.size(), 0);
     arguments = textMessageReceived.takeFirst();
     messageReceived = arguments.at(0).toString();
-    QCOMPARE(messageReceived.length(), longString.length());
+    QCOMPARE(messageReceived.size(), longString.size());
     QCOMPARE(messageReceived, longString);
 
     arguments = textFrameReceived.takeLast();
@@ -515,20 +504,20 @@ void tst_QWebSocket::tst_sendTextMessage()
     socket.open(QUrl(QStringLiteral("ws://") + echoServer.hostAddress().toString() +
                      QStringLiteral(":") + QString::number(echoServer.port())));
 
-    QTRY_COMPARE(socketConnectedSpy.count(), 1);
+    QTRY_COMPARE(socketConnectedSpy.size(), 1);
     QCOMPARE(socket.state(), QAbstractSocket::ConnectedState);
 
     socket.sendTextMessage(QStringLiteral("Hello world!"));
 
     QVERIFY(textMessageReceived.wait(500));
-    QCOMPARE(textMessageReceived.count(), 1);
-    QCOMPARE(binaryMessageReceived.count(), 0);
-    QCOMPARE(binaryFrameReceived.count(), 0);
+    QCOMPARE(textMessageReceived.size(), 1);
+    QCOMPARE(binaryMessageReceived.size(), 0);
+    QCOMPARE(binaryFrameReceived.size(), 0);
     arguments = textMessageReceived.takeFirst();
     messageReceived = arguments.at(0).toString();
     QCOMPARE(messageReceived, QStringLiteral("Hello world!"));
 
-    QCOMPARE(textFrameReceived.count(), 1);
+    QCOMPARE(textFrameReceived.size(), 1);
     arguments = textFrameReceived.takeFirst();
     frameReceived = arguments.at(0).toString();
     isLastFrame = arguments.at(1).toBool();
@@ -559,7 +548,7 @@ void tst_QWebSocket::tst_sendBinaryMessage()
     socket.open(QUrl(QStringLiteral("ws://") + echoServer.hostAddress().toString() +
                      QStringLiteral(":") + QString::number(echoServer.port())));
 
-    QTRY_COMPARE(socketConnectedSpy.count(), 1);
+    QTRY_COMPARE(socketConnectedSpy.size(), 1);
     QCOMPARE(socket.state(), QAbstractSocket::ConnectedState);
 
     QCOMPARE(socket.bytesToWrite(), 0);
@@ -569,14 +558,14 @@ void tst_QWebSocket::tst_sendBinaryMessage()
     QVERIFY(binaryMessageReceived.wait(500));
     QCOMPARE(socket.bytesToWrite(), 0);
 
-    QCOMPARE(textMessageReceived.count(), 0);
-    QCOMPARE(textFrameReceived.count(), 0);
-    QCOMPARE(binaryMessageReceived.count(), 1);
+    QCOMPARE(textMessageReceived.size(), 0);
+    QCOMPARE(textFrameReceived.size(), 0);
+    QCOMPARE(binaryMessageReceived.size(), 1);
     QList<QVariant> arguments = binaryMessageReceived.takeFirst();
     QByteArray messageReceived = arguments.at(0).toByteArray();
     QCOMPARE(messageReceived, QByteArrayLiteral("Hello world!"));
 
-    QCOMPARE(binaryFrameReceived.count(), 1);
+    QCOMPARE(binaryFrameReceived.size(), 1);
     arguments = binaryFrameReceived.takeFirst();
     QByteArray frameReceived = arguments.at(0).toByteArray();
     bool isLastFrame = arguments.at(1).toBool();
@@ -593,20 +582,20 @@ void tst_QWebSocket::tst_sendBinaryMessage()
     socket.open(QUrl(QStringLiteral("ws://") + echoServer.hostAddress().toString() +
                      QStringLiteral(":") + QString::number(echoServer.port())));
 
-    QTRY_COMPARE(socketConnectedSpy.count(), 1);
+    QTRY_COMPARE(socketConnectedSpy.size(), 1);
     QCOMPARE(socket.state(), QAbstractSocket::ConnectedState);
 
     socket.sendBinaryMessage(QByteArrayLiteral("Hello world!"));
 
     QVERIFY(binaryMessageReceived.wait(500));
-    QCOMPARE(textMessageReceived.count(), 0);
-    QCOMPARE(textFrameReceived.count(), 0);
-    QCOMPARE(binaryMessageReceived.count(), 1);
+    QCOMPARE(textMessageReceived.size(), 0);
+    QCOMPARE(textFrameReceived.size(), 0);
+    QCOMPARE(binaryMessageReceived.size(), 1);
     arguments = binaryMessageReceived.takeFirst();
     messageReceived = arguments.at(0).toByteArray();
     QCOMPARE(messageReceived, QByteArrayLiteral("Hello world!"));
 
-    QCOMPARE(binaryFrameReceived.count(), 1);
+    QCOMPARE(binaryFrameReceived.size(), 1);
     arguments = binaryFrameReceived.takeFirst();
     frameReceived = arguments.at(0).toByteArray();
     isLastFrame = arguments.at(1).toBool();
@@ -626,16 +615,63 @@ void tst_QWebSocket::tst_errorString()
 
     socket.open(QUrl(QStringLiteral("ws://someserver.on.mars:9999")));
 
-    QTRY_COMPARE_WITH_TIMEOUT(errorSpy.count(), 1, 10000);
+    QTRY_COMPARE_WITH_TIMEOUT(errorSpy.size(), 1, 10000);
     QList<QVariant> arguments = errorSpy.takeFirst();
     QAbstractSocket::SocketError socketError =
             qvariant_cast<QAbstractSocket::SocketError>(arguments.at(0));
     QCOMPARE(socketError, QAbstractSocket::HostNotFoundError);
     QCOMPARE(socket.errorString(), QStringLiteral("Host not found"));
+
+    // Check that handshake status code is parsed. The error is triggered by
+    // refusing the origin authentication
+    EchoServer echoServer;
+    errorSpy.clear();
+    QSignalSpy socketConnectedSpy(&socket, SIGNAL(connected()));
+    QSignalSpy serverConnectedSpy(&echoServer, SIGNAL(newConnection(QUrl)));
+    connect(&echoServer, &EchoServer::originAuthenticationRequired,
+            &socket, [](QWebSocketCorsAuthenticator* pAuthenticator){
+        pAuthenticator->setAllowed(false);
+    });
+
+    socket.open(QUrl(QStringLiteral("ws://") + echoServer.hostAddress().toString() +
+                     QStringLiteral(":") + QString::number(echoServer.port())));
+    QTRY_VERIFY(errorSpy.size() > 0);
+    QCOMPARE(serverConnectedSpy.size(), 0);
+    QCOMPARE(socketConnectedSpy.size(), 0);
+    QCOMPARE(socket.errorString(),
+             QStringLiteral("QWebSocketPrivate::processHandshake: Unhandled http status code: 403"
+                            " (Access Forbidden)."));
+}
+
+void tst_QWebSocket::tst_openRequest_data()
+{
+    QTest::addColumn<QStringList>("subprotocols");
+    QTest::addColumn<QString>("subprotocolHeader");
+    QTest::addColumn<QRegularExpression>("warningExpression");
+
+    QTest::addRow("no subprotocols") << QStringList{} << QString{} << QRegularExpression{};
+    QTest::addRow("single subprotocol") << QStringList{"foobar"} << QStringLiteral("foobar")
+                                        << QRegularExpression{};
+    QTest::addRow("multiple subprotocols") << QStringList{"foo", "bar"}
+                                           << QStringLiteral("foo, bar")
+                                           << QRegularExpression{};
+    QTest::addRow("subprotocol with whitespace")
+            << QStringList{"chat", "foo\r\nbar with space"}
+            << QStringLiteral("chat")
+            << QRegularExpression{".*invalid.*bar with space"};
+
+    QTest::addRow("subprotocol with invalid chars")
+            << QStringList{"chat", "foo{}"}
+            << QStringLiteral("chat")
+            << QRegularExpression{".*invalid.*foo"};
 }
 
 void tst_QWebSocket::tst_openRequest()
 {
+    QFETCH(QStringList, subprotocols);
+    QFETCH(QString, subprotocolHeader);
+    QFETCH(QRegularExpression, warningExpression);
+
     EchoServer echoServer;
 
     QWebSocket socket;
@@ -650,16 +686,117 @@ void tst_QWebSocket::tst_openRequest()
     url.setQuery(query);
     QNetworkRequest req(url);
     req.setRawHeader("X-Custom-Header", "A custom header");
-    socket.open(req);
+    QWebSocketHandshakeOptions options;
+    options.setSubprotocols(subprotocols);
 
-    QTRY_COMPARE(socketConnectedSpy.count(), 1);
-    QTRY_COMPARE(serverRequestSpy.count(), 1);
+    if (!warningExpression.pattern().isEmpty())
+        QTest::ignoreMessage(QtWarningMsg, warningExpression);
+
+    socket.open(req, options);
+
+    QTRY_COMPARE(socketConnectedSpy.size(), 1);
+    QTRY_COMPARE(serverRequestSpy.size(), 1);
     QCOMPARE(socket.state(), QAbstractSocket::ConnectedState);
     QList<QVariant> arguments = serverRequestSpy.takeFirst();
     QNetworkRequest requestConnected = arguments.at(0).value<QNetworkRequest>();
     QCOMPARE(requestConnected.url(), req.url());
     QCOMPARE(requestConnected.rawHeader("X-Custom-Header"), req.rawHeader("X-Custom-Header"));
+
+    if (subprotocols.isEmpty())
+        QVERIFY(!requestConnected.hasRawHeader("Sec-WebSocket-Protocol"));
+    else
+        QCOMPARE(requestConnected.rawHeader("Sec-WebSocket-Protocol"), subprotocolHeader);
+
+
     socket.close();
+}
+
+void tst_QWebSocket::tst_protocolAccessor()
+{
+    EchoServer echoServer;
+
+    QWebSocket socket;
+
+    QUrl url = QUrl(QStringLiteral("ws://") + echoServer.hostAddress().toString() +
+                    QLatin1Char(':') + QString::number(echoServer.port()));
+
+    QWebSocketHandshakeOptions options;
+    options.setSubprotocols({ "foo", "protocol2" });
+
+    socket.open(url, options);
+
+    QTRY_COMPARE(socket.state(), QAbstractSocket::ConnectedState);
+
+    QCOMPARE(socket.subprotocol(), "protocol2");
+
+    socket.close();
+}
+
+void tst_QWebSocket::protocolsHeaderGeneration_data()
+{
+    QTest::addColumn<QStringList>("subprotocols");
+    QTest::addColumn<int>("numInvalidEntries");
+
+    using QSL = QStringList;
+    QTest::addRow("all-invalid") << QSL{ "hello?", "------,,,,------" } << 2;
+    QTest::addRow("one-valid") << QSL{ "hello?", "ImValid" } << 1;
+    QTest::addRow("all-valid") << QSL{ "hello", "ImValid" } << 0;
+}
+
+// We test that the Sec-WebSocket-Protocol header is generated normally in presence
+// of one or more invalid entries. That is, it should not be included at all
+// if there are no valid entries, and there should be no separators with only
+// one valid entry.
+void tst_QWebSocket::protocolsHeaderGeneration()
+{
+    QFETCH(const QStringList, subprotocols);
+    QFETCH(const int, numInvalidEntries);
+    const bool containsValidEntry = numInvalidEntries != subprotocols.size();
+
+    QTcpServer tcpServer;
+    QVERIFY(tcpServer.listen());
+
+    QWebSocket socket;
+
+    QUrl url = QUrl("ws://127.0.0.1:%1"_L1.arg(QString::number(tcpServer.serverPort())));
+
+    QWebSocketHandshakeOptions options;
+    options.setSubprotocols(subprotocols);
+
+    QCOMPARE(options.subprotocols().size(), subprotocols.size());
+    for (int i = 0; i < numInvalidEntries; ++i) {
+        QTest::ignoreMessage(QtMsgType::QtWarningMsg,
+                QRegularExpression("Ignoring invalid WebSocket subprotocol name \".*\""));
+    }
+    socket.open(url, options);
+
+    QTRY_VERIFY(tcpServer.hasPendingConnections());
+    QTcpSocket *serverSocket = tcpServer.nextPendingConnection();
+    QVERIFY(serverSocket);
+
+    bool hasSeenHeader = false;
+    while (serverSocket->state() == QAbstractSocket::ConnectedState) {
+        if (!serverSocket->canReadLine()) {
+            QTRY_VERIFY2(serverSocket->canReadLine(),
+                    "Reached end-of-data without seeing end-of-header!");
+        }
+        const QByteArray fullLine = serverSocket->readLine();
+        QByteArrayView line = fullLine;
+        if (line == "\r\n") // End-of-Header
+            break;
+        QByteArrayView headerPrefix = "Sec-WebSocket-Protocol:";
+        if (line.size() < headerPrefix.size())
+            continue;
+        if (line.first(headerPrefix.size()).compare(headerPrefix, Qt::CaseInsensitive) != 0)
+            continue;
+        hasSeenHeader = true;
+        QByteArrayView protocols = line.sliced(headerPrefix.size()).trimmed();
+        QVERIFY(!protocols.empty());
+        QCOMPARE(protocols.count(','), subprotocols.size() - numInvalidEntries - 1);
+        // Keep going in case we encounter the header again
+    }
+    QCOMPARE(hasSeenHeader, containsValidEntry);
+    serverSocket->disconnectFromHost();
 }
 
 class WebSocket : public QWebSocket
@@ -733,7 +870,7 @@ void tst_QWebSocket::tst_moveToThread()
     url.setQuery(query);
 
     socket->asyncOpen(url);
-    if (socketConnectedSpy.count() == 0)
+    if (socketConnectedSpy.size() == 0)
         QVERIFY(socketConnectedSpy.wait(500));
 
     socket->asyncSendTextMessage(textMessage);
@@ -800,16 +937,16 @@ void tst_QWebSocket::overlongCloseReason()
     QUrl url = QUrl(QStringLiteral("ws://") + echoServer.hostAddress().toString() +
                     QStringLiteral(":") + QString::number(echoServer.port()));
     socket.open(url);
-    QTRY_COMPARE(socketConnectedSpy.count(), 1);
-    QTRY_COMPARE(serverConnectedSpy.count(), 1);
+    QTRY_COMPARE(socketConnectedSpy.size(), 1);
+    QTRY_COMPARE(serverConnectedSpy.size(), 1);
 
     const QString reason(200, QChar::fromLatin1('a'));
     socket.close(QWebSocketProtocol::CloseCodeGoingAway, reason);
     QCOMPARE(socket.closeCode(), QWebSocketProtocol::CloseCodeGoingAway);
     // Max length of a control frame is 125, but 2 bytes are used for the close code:
-    QCOMPARE(socket.closeReason().length(), 123);
+    QCOMPARE(socket.closeReason().size(), 123);
     QCOMPARE(socket.closeReason(), reason.left(123));
-    QTRY_COMPARE(socketDisconnectedSpy.count(), 1);
+    QTRY_COMPARE(socketDisconnectedSpy.size(), 1);
 }
 
 void tst_QWebSocket::incomingMessageTooLong()
@@ -829,13 +966,13 @@ void tst_QWebSocket::incomingMessageTooLong()
     QUrl url = QUrl(QStringLiteral("ws://") + echoServer.hostAddress().toString() +
                     QStringLiteral(":") + QString::number(echoServer.port()));
     socket.open(url);
-    QTRY_COMPARE(socketConnectedSpy.count(), 1);
-    QTRY_COMPARE(serverConnectedSpy.count(), 1);
+    QTRY_COMPARE(socketConnectedSpy.size(), 1);
+    QTRY_COMPARE(serverConnectedSpy.size(), 1);
 
     QString payload(maxAllowedIncomingMessageSize+1, 'a');
     QCOMPARE(socket.sendTextMessage(payload), payload.size());
 
-    QTRY_COMPARE(socketDisconnectedSpy.count(), 1);
+    QTRY_COMPARE(socketDisconnectedSpy.size(), 1);
     QCOMPARE(socket.closeCode(), QWebSocketProtocol::CloseCodeTooMuchData);
 }
 
@@ -857,13 +994,13 @@ void tst_QWebSocket::incomingFrameTooLong()
     QUrl url = QUrl(QStringLiteral("ws://") + echoServer.hostAddress().toString() +
                     QStringLiteral(":") + QString::number(echoServer.port()));
     socket.open(url);
-    QTRY_COMPARE(socketConnectedSpy.count(), 1);
-    QTRY_COMPARE(serverConnectedSpy.count(), 1);
+    QTRY_COMPARE(socketConnectedSpy.size(), 1);
+    QTRY_COMPARE(serverConnectedSpy.size(), 1);
 
     QString payload(maxAllowedIncomingFrameSize+1, 'a');
     QCOMPARE(socket.sendTextMessage(payload), payload.size());
 
-    QTRY_COMPARE(socketDisconnectedSpy.count(), 1);
+    QTRY_COMPARE(socketDisconnectedSpy.size(), 1);
     QCOMPARE(socket.closeCode(), QWebSocketProtocol::CloseCodeTooMuchData);
 }
 

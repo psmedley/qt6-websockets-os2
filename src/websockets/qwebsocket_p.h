@@ -1,41 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2016 Kurt Pattyn <pattyn.kurt@gmail.com>.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the QtWebSockets module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 3 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL3 included in the
-** packaging of this file. Please review the following information to
-** ensure the GNU Lesser General Public License version 3 requirements
-** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 2.0 or (at your option) the GNU General
-** Public license version 3 or any later version approved by the KDE Free
-** Qt Foundation. The licenses are as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-2.0.html and
-** https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2016 Kurt Pattyn <pattyn.kurt@gmail.com>.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #ifndef QWEBSOCKET_P_H
 #define QWEBSOCKET_P_H
@@ -65,12 +29,13 @@
 #include <private/qobject_p.h>
 
 #include "qwebsocket.h"
+#include "qwebsockethandshakeoptions.h"
 #include "qwebsocketprotocol.h"
 #include "qwebsocketdataprocessor_p.h"
 #include "qdefaultmaskgenerator_p.h"
 
 #ifdef Q_OS_WASM
-#include <emscripten/val.h>
+#    include <emscripten/websocket.h>
 #endif
 
 QT_BEGIN_NAMESPACE
@@ -138,6 +103,7 @@ public:
     QString resourceName() const;
     QNetworkRequest request() const;
     QString origin() const;
+    QWebSocketHandshakeOptions handshakeOptions() const;
     QString protocol() const;
     QString extension() const;
     QWebSocketProtocol::CloseCode closeCode() const;
@@ -157,7 +123,7 @@ public:
 
     void closeGoingAway();
     void close(QWebSocketProtocol::CloseCode closeCode, QString reason);
-    void open(const QNetworkRequest &request, bool mask);
+    void open(const QNetworkRequest &request, const QWebSocketHandshakeOptions &options, bool mask);
     void ping(const QByteArray &payload);
     void setSocketState(QAbstractSocket::SocketState state);
 
@@ -171,17 +137,22 @@ public:
     void setOutgoingFrameSize(quint64 outgoingFrameSize);
     quint64 outgoingFrameSize() const;
     static quint64 maxOutgoingFrameSize();
-
+#ifdef Q_OS_WASM
+    void setSocketClosed(const EmscriptenWebSocketCloseEvent *emCloseEvent);
+    QString closeCodeToString(QWebSocketProtocol::CloseCode code);
+#endif
 private:
     QWebSocketPrivate(QTcpSocket *pTcpSocket, QWebSocketProtocol::Version version);
     void setVersion(QWebSocketProtocol::Version version);
     void setResourceName(const QString &resourceName);
-    void setRequest(const QNetworkRequest &request);
+    void setRequest(const QNetworkRequest &request, const QWebSocketHandshakeOptions &options = {});
     void setOrigin(const QString &origin);
     void setProtocol(const QString &protocol);
     void setExtension(const QString &extension);
     void enableMasking(bool enable);
     void setErrorString(const QString &errorString);
+
+    QStringList requestedSubProtocols() const;
 
     void socketDestroyed(QObject *socket);
 
@@ -204,7 +175,7 @@ private:
                                    QString host,
                                    QString origin,
                                    QString extensions,
-                                   QString protocols,
+                                   const QStringList &options,
                                    QByteArray key,
                                    const QList<QPair<QString, QString> > &headers);
 
@@ -225,6 +196,7 @@ private:
     QUrl m_resource;
     QString m_resourceName;
     QNetworkRequest m_request;
+    QWebSocketHandshakeOptions m_options;
     QString m_origin;
     QString m_protocol;
     QString m_extension;
@@ -249,17 +221,12 @@ private:
     QMaskGenerator *m_pMaskGenerator;
     QDefaultMaskGenerator m_defaultMaskGenerator;
 
-    QByteArray m_statusLine;
-    int m_httpStatusCode;
-    int m_httpMajorVersion, m_httpMinorVersion;
-    QString m_httpStatusMessage;
-    QMultiMap<QString, QString> m_headers;
-
     quint64 m_outgoingFrameSize;
 
     friend class QWebSocketServerPrivate;
 #ifdef Q_OS_WASM
-    emscripten::val socketContext = emscripten::val::null();
+    EMSCRIPTEN_WEBSOCKET_T m_socketContext = 0;
+    uint16_t m_readyState = 0;
 #endif
 };
 
