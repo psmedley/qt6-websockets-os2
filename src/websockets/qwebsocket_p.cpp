@@ -174,6 +174,10 @@ void QWebSocketPrivate::init()
 */
 QWebSocketPrivate::~QWebSocketPrivate()
 {
+#ifdef Q_OS_WASM
+    if (m_socketContext)
+        emscripten_websocket_delete(m_socketContext);
+#endif
 }
 
 /*!
@@ -1056,7 +1060,7 @@ void QWebSocketPrivate::processHandshake(QTcpSocket *pSocket)
                     QString::number(acceptKey.size()), QString::number(parser.getMajorVersion()),
                     QString::number(parser.getMinorVersion()), upgrade, connection);
             errorDescription = QWebSocket::tr(
-                "Invalid parameter(s) presented during protocol upgrade: %1").arg(upgradeParms);
+                "Invalid parameter encountered during protocol upgrade: %1").arg(upgradeParms);
         }
     } else if (parser.getStatusCode() == 400) {
         //HTTP/1.1 400 Bad Request
@@ -1092,6 +1096,8 @@ void QWebSocketPrivate::processHandshake(QTcpSocket *pSocket)
         // handshake failed
         setErrorString(errorDescription);
         Q_EMIT q->error(QAbstractSocket::ConnectionRefusedError);
+        if (m_pSocket->state() != QAbstractSocket::UnconnectedState)
+            m_pSocket->disconnectFromHost();
     }
 }
 
