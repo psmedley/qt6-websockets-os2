@@ -1,3 +1,6 @@
+# Copyright (C) 2022 The Qt Company Ltd.
+# SPDX-License-Identifier: BSD-3-Clause
+
 # Generated from dataprocessor.pro.
 
 if(NOT QT_FEATURE_private_tests)
@@ -11,7 +14,7 @@ endif()
 qt_internal_add_test(tst_dataprocessor
     SOURCES
         tst_dataprocessor.cpp
-    PUBLIC_LIBRARIES
+    LIBRARIES
         Qt::WebSocketsPrivate
 )
 

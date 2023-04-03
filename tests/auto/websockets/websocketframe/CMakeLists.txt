@@ -1,3 +1,6 @@
+# Copyright (C) 2022 The Qt Company Ltd.
+# SPDX-License-Identifier: BSD-3-Clause
+
 # Generated from websocketframe.pro.
 
 if(NOT QT_FEATURE_private_tests)
@@ -11,7 +14,7 @@ endif()
 qt_internal_add_test(tst_websocketframe
     SOURCES
         tst_websocketframe.cpp
-    PUBLIC_LIBRARIES
+    LIBRARIES
         Qt::WebSocketsPrivate
 )
 

@@ -12,6 +12,8 @@
 #include <emscripten/websocket.h>
 #include <emscripten/val.h>
 
+#include <QHostAddress>
+
 static EM_BOOL q_onWebSocketErrorCallback(int eventType,
                                           const EmscriptenWebSocketErrorEvent *e,
                                           void *userData)
@@ -22,7 +24,7 @@ static EM_BOOL q_onWebSocketErrorCallback(int eventType,
     QWebSocketPrivate *wsp = reinterpret_cast<QWebSocketPrivate *>(userData);
     Q_ASSERT (wsp);
 
-    emit wsp->q_func()->error(wsp->error());
+    emit wsp->q_func()->errorOccurred(wsp->error());
     return EM_FALSE;
 }
 
@@ -78,9 +80,12 @@ qint64 QWebSocketPrivate::sendTextMessage(const QString &message)
     emscripten_websocket_get_ready_state(m_socketContext, &m_readyState);
 
     if (m_readyState == 1) {
-        result = emscripten_websocket_send_utf8_text(m_socketContext, message.toUtf8());
+        QByteArray messageArray = message.toUtf8();
+        result = emscripten_websocket_send_utf8_text(m_socketContext, messageArray);
         if (result < 0)
-            emit q_func()->error(QAbstractSocket::UnknownSocketError);
+            emitErrorOccurred(QAbstractSocket::UnknownSocketError);
+        else
+            return messageArray.length();
     } else
         qWarning() << "Could not send message. Websocket is not open";
 
@@ -96,7 +101,9 @@ qint64 QWebSocketPrivate::sendBinaryMessage(const QByteArray &data)
                 m_socketContext, const_cast<void *>(reinterpret_cast<const void *>(data.constData())),
                 data.size());
         if (result < 0)
-            emit q_func()->error(QAbstractSocket::UnknownSocketError);
+            emitErrorOccurred(QAbstractSocket::UnknownSocketError);
+        else
+            return data.size();
     } else
         qWarning() << "Could not send message. Websocket is not open";
 
@@ -113,7 +120,7 @@ void QWebSocketPrivate::close(QWebSocketProtocol::CloseCode closeCode, QString r
 
     emscripten_websocket_get_ready_state(m_socketContext, &m_readyState);
 
-    if (m_readyState == 1) {
+    if (m_readyState == 1 || m_readyState == 0) {
         emscripten_websocket_close(m_socketContext, (int)closeCode, reason.toUtf8());
     }
     setSocketState(QAbstractSocket::UnconnectedState);
@@ -126,12 +133,11 @@ void QWebSocketPrivate::open(const QNetworkRequest &request,
 {
     Q_UNUSED(mask);
     Q_UNUSED(options)
-    Q_Q(QWebSocket);
 
     emscripten_websocket_get_ready_state(m_socketContext, &m_readyState);
 
     if ((m_readyState == 1 || m_readyState == 3) && m_socketContext != 0) {
-        emit q->error(QAbstractSocket::OperationError);
+        emitErrorOccurred(QAbstractSocket::OperationError);
         return;
     }
 
@@ -146,15 +152,27 @@ void QWebSocketPrivate::open(const QNetworkRequest &request,
     if (!url.isValid()
             || url.toString().contains(QStringLiteral("\r\n"))) {
         setErrorString(QWebSocket::tr("Connection refused"));
-        Q_EMIT q->error(QAbstractSocket::ConnectionRefusedError);
+
+        emitErrorOccurred(QAbstractSocket::ConnectionRefusedError);
+
         return;
     }
-    if (isSecureContext && url.scheme() == QStringLiteral("ws")) {
-         const QString message =
+    // exception for localhost/127.0.0.1/[::1]
+    // localhost has special privledges
+
+    QHostAddress hostAddress(url.host());
+
+    bool hostAddressIsLocal = (hostAddress == QHostAddress::LocalHost
+            || hostAddress == QHostAddress::LocalHostIPv6);
+
+    if (url.host() != QStringLiteral("localhost") && !hostAddressIsLocal) {
+        if (isSecureContext && url.scheme() == QStringLiteral("ws")) {
+            const QString message =
                     QWebSocket::tr("Unsupported WebSocket scheme: %1").arg(url.scheme());
-        setErrorString(message);
-        emit q->error(QAbstractSocket::UnsupportedSocketOperationError);
-        return;
+            setErrorString(message);
+            emitErrorOccurred(QAbstractSocket::UnsupportedSocketOperationError);
+            return;
+        }
     }
 
     EmscriptenWebSocketCreateAttributes attr;
@@ -187,7 +205,7 @@ void QWebSocketPrivate::open(const QNetworkRequest &request,
 
     if (m_socketContext <= 0) { // m_readyState might not be changed yet
         // error
-        emit q->error(QAbstractSocket::UnknownSocketError);
+        emitErrorOccurred(QAbstractSocket::UnknownSocketError);
         return;
     }
 
@@ -239,7 +257,7 @@ void QWebSocketPrivate::setSocketClosed(const EmscriptenWebSocketCloseEvent *emC
 
     if (!emCloseEvent->wasClean) {
         m_errorString = QStringLiteral("The remote host closed the connection");
-        emit q->error(error());
+        emit q->errorOccurred(error());
     }
 
     emscripten_websocket_get_ready_state(m_socketContext, &m_readyState);

@@ -214,13 +214,12 @@ void QQmlWebSocket::setSocket(QWebSocket *socket)
     m_webSocket.reset(socket);
     if (m_webSocket) {
         // explicit ownership via QScopedPointer
-        m_webSocket->setParent(Q_NULLPTR);
+        m_webSocket->setParent(nullptr);
         connect(m_webSocket.data(), &QWebSocket::textMessageReceived,
                 this, &QQmlWebSocket::textMessageReceived);
         connect(m_webSocket.data(), &QWebSocket::binaryMessageReceived,
                 this, &QQmlWebSocket::binaryMessageReceived);
-        typedef void (QWebSocket::* ErrorSignal)(QAbstractSocket::SocketError);
-        connect(m_webSocket.data(), static_cast<ErrorSignal>(&QWebSocket::error),
+        connect(m_webSocket.data(), &QWebSocket::errorOccurred,
                 this, &QQmlWebSocket::onError);
         connect(m_webSocket.data(), &QWebSocket::stateChanged,
                 this, &QQmlWebSocket::onStateChanged);

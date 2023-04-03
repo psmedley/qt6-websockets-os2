@@ -75,6 +75,12 @@ public:
                                QWebSocketProtocol::Version version);
     ~QWebSocketPrivate() override;
 
+    // both constants are taken from the default settings of Apache
+    // see: http://httpd.apache.org/docs/2.2/mod/core.html#limitrequestfieldsize and
+    // http://httpd.apache.org/docs/2.2/mod/core.html#limitrequestfields
+    static constexpr int MAX_HEADERLINE_LENGTH = 8 * 1024; // maximum length of a http request header line
+    static constexpr int MAX_HEADERLINES = 100;            // maximum number of http request header lines
+
     void init();
     void abort();
     QAbstractSocket::SocketError error() const;
@@ -189,6 +195,7 @@ private:
     QByteArray generateKey() const;
     Q_REQUIRED_RESULT qint64 writeFrames(const QList<QByteArray> &frames);
     Q_REQUIRED_RESULT qint64 writeFrame(const QByteArray &frame);
+    void emitErrorOccurred(QAbstractSocket::SocketError error);
 
     QTcpSocket *m_pSocket;
     QString m_errorString;
