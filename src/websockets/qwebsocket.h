@@ -17,8 +17,11 @@
 #include "QtWebSockets/qwebsockets_global.h"
 #include "QtWebSockets/qwebsocketprotocol.h"
 
+#include <QtCore/qobject.h>
+
 QT_BEGIN_NAMESPACE
 
+class QAuthenticator;
 class QTcpSocket;
 class QWebSocketPrivate;
 class QMaskGenerator;
@@ -118,6 +121,7 @@ Q_SIGNALS:
 #ifndef QT_NO_NETWORKPROXY
     void proxyAuthenticationRequired(const QNetworkProxy &proxy, QAuthenticator *pAuthenticator);
 #endif
+    void authenticationRequired(QAuthenticator *authenticator);
     void readChannelFinished();
     void textFrameReceived(const QString &frame, bool isLastFrame);
     void binaryFrameReceived(const QByteArray &frame, bool isLastFrame);
