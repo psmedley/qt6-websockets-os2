@@ -19,4 +19,5 @@ qt_internal_add_qml_module(qmlwebsockets
         Qt::CorePrivate
         Qt::QmlPrivate
         Qt::WebSockets
+    OS2_SHORT_NAME qmlwebso
 )
