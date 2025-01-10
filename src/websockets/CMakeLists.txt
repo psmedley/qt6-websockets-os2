@@ -21,6 +21,8 @@ qt_internal_add_module(WebSockets
         qwebsocketprotocol.cpp qwebsocketprotocol.h qwebsocketprotocol_p.h
         qwebsockets_global.h
         qwebsocketserver.cpp qwebsocketserver.h qwebsocketserver_p.cpp qwebsocketserver_p.h
+    DEFINES
+        QT_NO_CONTEXTLESS_CONNECT
     LIBRARIES
         Qt::CorePrivate
         Qt::NetworkPrivate
@@ -29,7 +31,6 @@ qt_internal_add_module(WebSockets
         Qt::Network
     PRIVATE_MODULE_INTERFACE
         Qt::CorePrivate
-    GENERATE_CPP_EXPORTS
 )
 
 #### Keys ignored in scope 1:.:.:websockets.pro:<TRUE>:

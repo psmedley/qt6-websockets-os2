@@ -1,5 +1,5 @@
 // Copyright (C) 2016 Kurt Pattyn <pattyn.kurt@gmail.com>.
-// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR GPL-3.0-only WITH Qt-GPL-exception-1.0
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR GPL-3.0-only
 #include <QRegularExpression>
 #include <QString>
 #include <QtTest>
@@ -9,6 +9,9 @@
 #include <QtWebSockets/QWebSocketServer>
 #include <QtWebSockets/qwebsocketprotocol.h>
 
+#include <QtCore/qoperatingsystemversion.h>
+#include <QtCore/qsystemdetection.h>
+
 #include <QtNetwork/qtcpserver.h>
 #include <QtNetwork/qauthenticator.h>
 #include <QtNetwork/qtcpsocket.h>
@@ -17,6 +20,7 @@
 #include <QtNetwork/qsslserver.h>
 #include <QtNetwork/qsslcertificate.h>
 #include <QtNetwork/qsslkey.h>
+#include <QtNetwork/qsslsocket.h>
 #endif
 
 #include <utility>
@@ -24,6 +28,31 @@
 QT_USE_NAMESPACE
 
 Q_DECLARE_METATYPE(QWebSocketProtocol::Version)
+
+
+#if QT_CONFIG(ssl)
+// Check if it's a macOS-build-with-SDK14 running on macOS 15:
+bool sslServerIsBlockingKeychain()
+{
+#ifdef Q_OS_MACOS
+    if (QSslSocket::activeBackend() != QLatin1String("securetransport"))
+        return false;
+#if QT_MACOS_IOS_PLATFORM_SDK_EQUAL_OR_ABOVE(150000, 180000)
+    // Starting from macOS 15 our temporary keychain is ignored.
+    // We have to use kSecImportToMemoryOnly/kCFBooleanTrue key/value
+    // instead. This way we don't have to use QT_SSL_USE_TEMPORARY_KEYCHAIN anymore.
+    return false;
+#else
+    if (QOperatingSystemVersion::current() >= QOperatingSystemVersion::MacOSSequoia) {
+        // Built with SDK < 15, with file-based keychains that no longer work on macOS >= 15.
+        return true;
+    }
+#endif
+#endif // Q_OS_MACOS
+    return false;
+}
+#endif // QT_CONFIG(ssl)
+
 
 using namespace Qt::StringLiterals;
 
@@ -693,6 +722,7 @@ void tst_QWebSocket::tst_openRequest()
 
     QUrl url = QUrl(QStringLiteral("ws://") + echoServer.hostAddress().toString() +
                     QLatin1Char(':') + QString::number(echoServer.port()));
+    url.setPath(QLatin1String("/"));
     QUrlQuery query;
     query.addQueryItem("queryitem", "with encoded characters");
     url.setQuery(query);
@@ -1025,7 +1055,7 @@ public:
 
         socket->write(payload);
         if (withConnectionClose)
-            socket->disconnectFromHost();
+            socket->close();
     }
 
     static QLatin1StringView getHeaderValue(const QLatin1StringView keyHeader,
@@ -1131,6 +1161,11 @@ void tst_QWebSocket::authenticationRequired_data()
         qDebug("Skipping the SslServer part of this test because proper TLS is not supported.");
         return;
     }
+    if (sslServerIsBlockingKeychain()) {
+        qDebug("SecureTransport is blocking in keychain access.");
+        return;
+    }
+
     // And double that, but now with TLS
     for (auto &server : serverScenarios) {
         server.withEncryption = true;
@@ -1360,7 +1395,7 @@ void tst_QWebSocket::customHeader()
         QVERIFY(serverSocketSpy.wait());
         data.append(serverSocket->readAll());
     }
-    QVERIFY(data.contains("CustomHeader: Example"));
+    QVERIFY(QLatin1StringView(data).contains("CustomHeader: Example"_L1, Qt::CaseInsensitive));
     const auto view = QLatin1String(data);
     const auto keyHeader = QLatin1String("Sec-WebSocket-Key:");
     const qsizetype keyStart = view.indexOf(keyHeader, 0, Qt::CaseInsensitive) + keyHeader.size();

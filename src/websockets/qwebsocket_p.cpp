@@ -31,6 +31,7 @@
 #include <QtNetwork/private/qauthenticator_p.h>
 
 #include <QtCore/QDebug>
+#include <QtCore/QTimer>
 
 #include <limits>
 #include <memory>
@@ -334,7 +335,7 @@ QStringList QWebSocketPrivate::requestedSubProtocols() const
 {
     auto subprotocolsRequestedInRawHeader = [this]() {
         QStringList protocols;
-        QByteArray rawProtocols = m_request.rawHeader("Sec-WebSocket-Protocol");
+        QByteArrayView rawProtocols = m_request.headers().value("Sec-WebSocket-Protocol");
         QLatin1StringView rawProtocolsView(rawProtocols);
         const QStringList &optionsProtocols = m_options.subprotocols();
         for (auto &&entry : rawProtocolsView.tokenize(u',', Qt::SkipEmptyParts)) {
@@ -360,9 +361,7 @@ QWebSocket *QWebSocketPrivate::upgradeFrom(QTcpSocket *pTcpSocket,
     QWebSocket *pWebSocket = new QWebSocket(pTcpSocket, response.acceptedVersion(), parent);
     if (Q_LIKELY(pWebSocket)) {
         QNetworkRequest netRequest(request.requestUrl());
-        const auto headers = request.headers();
-        for (auto it = headers.begin(), end = headers.end(); it != end; ++it)
-            netRequest.setRawHeader(it->first, it->second);
+        netRequest.setHeaders(request.headers());
 #ifndef QT_NO_SSL
         if (QSslSocket *sslSock = qobject_cast<QSslSocket *>(pTcpSocket))
             pWebSocket->setSslConfiguration(sslSock->sslConfiguration());
@@ -450,6 +449,8 @@ void QWebSocketPrivate::open(const QNetworkRequest &request,
         m_isClosingHandshakeSent = false;
 
         setRequest(request, options);
+        if (url.path().isEmpty())
+            url.setPath(QStringLiteral("/"));
         QString resourceName = url.path(QUrl::FullyEncoded);
         // Check for encoded \r\n
         if (resourceName.contains(QStringLiteral("%0D%0A"))) {
@@ -480,7 +481,7 @@ void QWebSocketPrivate::open(const QNetworkRequest &request,
                 QSslSocket *sslSocket = new QSslSocket(q);
                 m_pSocket = sslSocket;
                 if (Q_LIKELY(m_pSocket)) {
-                    QObject::connect(sslSocket, &QSslSocket::connected, [sslSocket](){
+                    QObject::connect(sslSocket, &QSslSocket::connected, sslSocket, [sslSocket]() {
                         sslSocket->setSocketOption(QAbstractSocket::LowDelayOption, 1);
                         sslSocket->setSocketOption(QAbstractSocket::KeepAliveOption, 1);
                     });
@@ -511,7 +512,7 @@ void QWebSocketPrivate::open(const QNetworkRequest &request,
         if (url.scheme() == QStringLiteral("ws")) {
             m_pSocket = new QTcpSocket(q);
             if (Q_LIKELY(m_pSocket)) {
-                QObject::connect(m_pSocket, &QTcpSocket::connected, [this](){
+                QObject::connect(m_pSocket, &QTcpSocket::connected, m_pSocket, [this](){
                     m_pSocket->setSocketOption(QAbstractSocket::LowDelayOption, 1);
                     m_pSocket->setSocketOption(QAbstractSocket::KeepAliveOption, 1);
                 });
@@ -1195,13 +1196,16 @@ void QWebSocketPrivate::processStateChanged(QAbstractSocket::SocketState socketS
             m_key = generateKey();
 
             QList<QPair<QString, QString> > headers;
-            const auto headerList = m_request.rawHeaderList();
-            for (const QByteArray &key : headerList) {
+            const auto h = m_request.headers();
+            for (qsizetype i = 0; i < h.size(); ++i) {
+                const auto name = h.nameAt(i);
+                const auto value = h.valueAt(i);
+
                 // protocols handled separately below
-                if (key.compare("Sec-WebSocket-Protocol", Qt::CaseInsensitive) == 0)
+                if (name.compare("Sec-WebSocket-Protocol", Qt::CaseInsensitive) == 0)
                     continue;
-                headers << qMakePair(QString::fromLatin1(key),
-                                     QString::fromLatin1(m_request.rawHeader(key)));
+                headers << qMakePair(QString::fromLatin1(name),
+                                     QString::fromLatin1(value));
             }
             const QStringList subProtocols = requestedSubProtocols();
 
