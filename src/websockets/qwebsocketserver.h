@@ -1,11 +1,12 @@
 // Copyright (C) 2016 Kurt Pattyn <pattyn.kurt@gmail.com>.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #ifndef QWEBSOCKETSERVER_H
 #define QWEBSOCKETSERVER_H
 
-#include "QtWebSockets/qwebsockets_global.h"
-#include "QtWebSockets/qwebsocketprotocol.h"
+#include <QtWebSockets/qwebsockets_global.h>
+#include <QtWebSockets/qwebsocketprotocol.h>
 
 #include <QtCore/QObject>
 #include <QtCore/QString>
@@ -120,6 +121,7 @@ Q_SIGNALS:
 #ifndef QT_NO_SSL
     void peerVerifyError(const QSslError &error);
     void sslErrors(const QList<QSslError> &errors);
+    void sslErrorsOccurred(QSslSocket *socket, const QList<QSslError> &errors);
     void preSharedKeyAuthenticationRequired(QSslPreSharedKeyAuthenticator *authenticator);
     void alertSent(QSsl::AlertLevel level, QSsl::AlertType type, const QString &description);
     void alertReceived(QSsl::AlertLevel level, QSsl::AlertType type, const QString &description);

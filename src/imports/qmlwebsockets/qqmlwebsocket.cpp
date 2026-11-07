@@ -1,5 +1,6 @@
 // Copyright (C) 2016 Kurt Pattyn <pattyn.kurt@gmail.com>.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 /*!
     \qmltype WebSocket
@@ -22,15 +23,35 @@
 */
 
 /*!
+  \property QQmlWebSocket::url
+  \brief the server URL to connect to.
+
+  The URL must have one of 2 schemes: \c{ws://} or \c{wss://}.
+  When not supplied, \c{ws://} is used.
+*/
+
+/*!
   \qmlproperty list<string> WebSocket::requestedSubprotocols
   \since 6.4
   The list of WebSocket subprotocols to send in the WebSocket handshake.
 */
 
 /*!
+  \property QQmlWebSocket::requestedSubprotocols
+  \since 6.4
+  \brief the list of WebSocket subprotocols to send in the WebSocket handshake.
+*/
+
+/*!
   \qmlproperty string WebSocket::negotiatedSubprotocol
   \since 6.4
   The WebSocket subprotocol that has been negotiated with the server.
+*/
+
+/*!
+  \property QQmlWebSocket::negotiatedSubprotocol
+  \since 6.4
+  \brief the WebSocket subprotocol that has been negotiated with the server.
 */
 
 /*!
@@ -48,9 +69,21 @@
 */
 
 /*!
+  \property QQmlWebSocket::status
+  \brief the status of the WebSocket.
+*/
+
+/*!
   \qmlproperty string WebSocket::errorString
   Contains a description of the last error that occurred. When no error occurrred,
   this string is empty.
+*/
+
+/*!
+  \property QQmlWebSocket::errorString
+  \brief a description of the last error that occurred.
+
+  When no error occurred, this string is empty.
 */
 
 /*!
@@ -58,6 +91,15 @@
   When set to true, a connection is made to the server with the given url.
   When set to false, the connection is closed.
   The default value is false.
+*/
+
+/*!
+  \property QQmlWebSocket::active
+  \brief whether the WebSocket connection is active.
+
+  When set to \c true, a connection is made to the server with the given URL.
+  When set to \c false, the connection is closed.
+  The default value is \c false.
 */
 
 /*!
@@ -92,12 +134,43 @@
   Sends the parameter \a message to the server.
 */
 
+/*!
+  \qmlmethod void WebSocket::ping()
+  \qmlmethod void WebSocket::ping(ArrayBuffer payload)
+  \since 6.10
+  Pings the server to indicate that the connection is still alive.
+  An additional \a payload can be sent along with the ping message.
+
+  The size of the \a payload cannot be bigger than 125 bytes.
+  If it is larger, the \a payload is clipped to 125 bytes.
+
+  \note QWebSocket and QWebSocketServer handles ping requests internally,
+  which means they automatically send back a pong response to the peer.
+
+  \sa pong()
+*/
+
+/*!
+  \qmlsignal WebSocket::pong(quint64 elapsedTime, ArrayBuffer payload)
+  \since 6.10
+  Emitted when a pong message is received in reply to a previous ping.
+  \a elapsedTime contains the roundtrip time in milliseconds and \a payload contains an optional
+  payload that was sent with the ping.
+
+  \sa ping()
+*/
+
 #include "qqmlwebsocket.h"
 #include <QtWebSockets/QWebSocket>
 #include <QtWebSockets/QWebSocketHandshakeOptions>
 
 QT_BEGIN_NAMESPACE
 
+/*!
+    \class QQmlWebSocket
+    \inmodule QtWebSockets
+    \internal
+*/
 QQmlWebSocket::QQmlWebSocket(QObject *parent) :
     QObject(parent),
     m_webSocket(),
@@ -146,6 +219,20 @@ qint64 QQmlWebSocket::sendBinaryMessage(const QByteArray &message)
         return 0;
     }
     return m_webSocket->sendBinaryMessage(message);
+}
+
+void QQmlWebSocket::ping()
+{
+    ping({});
+}
+
+void QQmlWebSocket::ping(const QByteArray &payload)
+{
+    if (m_status != Open) {
+        setErrorString(tr("Messages can only be sent when the socket is open."));
+        setStatus(Error);
+    }
+    m_webSocket->ping(payload);
 }
 
 QStringList QQmlWebSocket::requestedSubprotocols() const
@@ -221,6 +308,8 @@ void QQmlWebSocket::setSocket(QWebSocket *socket)
                 this, &QQmlWebSocket::textMessageReceived);
         connect(m_webSocket.data(), &QWebSocket::binaryMessageReceived,
                 this, &QQmlWebSocket::binaryMessageReceived);
+        connect(m_webSocket.data(), &QWebSocket::pong,
+                this, &QQmlWebSocket::pong);
         connect(m_webSocket.data(), &QWebSocket::errorOccurred,
                 this, &QQmlWebSocket::onError);
         connect(m_webSocket.data(), &QWebSocket::stateChanged,

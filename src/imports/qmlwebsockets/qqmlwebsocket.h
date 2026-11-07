@@ -1,5 +1,6 @@
 // Copyright (C) 2016 Kurt Pattyn <pattyn.kurt@gmail.com>.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #ifndef QQMLWEBSOCKET_H
 #define QQMLWEBSOCKET_H
@@ -24,8 +25,11 @@ class QQmlWebSocket : public QObject, public QQmlParserStatus
     Q_PROPERTY(Status status READ status NOTIFY statusChanged)
     Q_PROPERTY(QString errorString READ errorString NOTIFY errorStringChanged)
     Q_PROPERTY(bool active READ isActive WRITE setActive NOTIFY activeChanged)
-    Q_PROPERTY(QString negotiatedSubprotocol READ negotiatedSubprotocol
-               NOTIFY negotiatedSubprotocolChanged)
+    Q_PROPERTY(QString negotiatedSubprotocol READ negotiatedSubprotocol NOTIFY
+                       negotiatedSubprotocolChanged)
+
+    QML_NAMED_ELEMENT(WebSocket)
+    QML_ADDED_IN_VERSION(1, 0)
 
 public:
     explicit QQmlWebSocket(QObject *parent = 0);
@@ -56,6 +60,8 @@ public:
 
     Q_INVOKABLE qint64 sendTextMessage(const QString &message);
     Q_REVISION(1) Q_INVOKABLE qint64 sendBinaryMessage(const QByteArray &message);
+    Q_REVISION(6, 10) Q_INVOKABLE void ping();
+    Q_REVISION(6, 10) Q_INVOKABLE void ping(const QByteArray &payload);
 
 Q_SIGNALS:
     void textMessageReceived(QString message);
@@ -66,6 +72,7 @@ Q_SIGNALS:
     void urlChanged();
     void requestedSubprotocolsChanged();
     void negotiatedSubprotocolChanged();
+    Q_REVISION(6, 10) void pong(quint64 elapsedTime, const QByteArray &payload);
 
 public:
     void classBegin() override;

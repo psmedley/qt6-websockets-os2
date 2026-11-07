@@ -1,11 +1,13 @@
 // Copyright (C) 2016 Klarälvdalens Datakonsult AB, a KDAB Group company, info@kdab.com, author Milian Wolff <milian.wolff@kdab.com>
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #ifndef QQMLWEBSOCKETSERVER_H
 #define QQMLWEBSOCKETSERVER_H
 
 #include <QUrl>
 #include <QQmlParserStatus>
+#include <QtQml/qqmlregistration.h>
 #include <QtWebSockets/QWebSocketServer>
 
 QT_BEGIN_NAMESPACE
@@ -26,6 +28,9 @@ class QQmlWebSocketServer : public QObject, public QQmlParserStatus
     Q_PROPERTY(QString errorString READ errorString NOTIFY errorStringChanged)
     Q_PROPERTY(bool listen READ listen WRITE setListen NOTIFY listenChanged)
     Q_PROPERTY(bool accept READ accept WRITE setAccept NOTIFY acceptChanged)
+
+    QML_NAMED_ELEMENT(WebSocketServer)
+    QML_ADDED_IN_VERSION(1, 0)
 
 public:
     explicit QQmlWebSocketServer(QObject *parent = nullptr);

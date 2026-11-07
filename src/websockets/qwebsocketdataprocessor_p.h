@@ -1,5 +1,6 @@
 // Copyright (C) 2016 Kurt Pattyn <pattyn.kurt@gmail.com>.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #ifndef QWEBSOCKETDATAPROCESSOR_P_H
 #define QWEBSOCKETDATAPROCESSOR_P_H
@@ -88,8 +89,10 @@ private:
     QWebSocketFrame frame;
     QChronoTimer *m_waitTimer;
     quint64 m_maxAllowedMessageSize = MAX_MESSAGE_SIZE_IN_BYTES;
+    bool m_hasFailed = false;
 
     bool processControlFrame(const QWebSocketFrame &frame);
+    void reportError(QWebSocketProtocol::CloseCode code, const QString &description);
     void timeout();
 };
 

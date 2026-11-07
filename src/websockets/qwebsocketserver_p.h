@@ -1,5 +1,6 @@
 // Copyright (C) 2016 Kurt Pattyn <pattyn.kurt@gmail.com>.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #ifndef QWEBSOCKETSERVER_P_H
 #define QWEBSOCKETSERVER_P_H
@@ -92,7 +93,7 @@ public:
     void handleConnection(QTcpSocket *pTcpSocket) const;
 
 private slots:
-    void startHandshakeTimeout(QTcpSocket *pTcpSocket);
+    void startHandshakeTimeout(QTcpSocket *pTcpSocket) const;
 
 private:
     QTcpServer *m_pTcpServer;

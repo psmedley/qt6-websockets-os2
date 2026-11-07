@@ -1,6 +1,6 @@
 // Copyright (C) 2016 Kurt Pattyn <pattyn.kurt@gmail.com>.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
-
+// Qt-Security score:significant reason:default
 #ifndef QWEBSOCKET_P_H
 #define QWEBSOCKET_P_H
 //
@@ -167,8 +167,11 @@ private:
     void processPing(const QByteArray &data);
     void processPong(const QByteArray &data);
     void processClose(QWebSocketProtocol::CloseCode closeCode, QString closeReason);
+    void processError(QWebSocketProtocol::CloseCode closeCode, QString reason);
     void processHandshake(QTcpSocket *pSocket);
     void processStateChanged(QAbstractSocket::SocketState socketState);
+
+    void doClose(QWebSocketProtocol::CloseCode closeCode, QString reason, bool isFailed);
 
     Q_REQUIRED_RESULT qint64 doWriteFrames(const QByteArray &data, bool isBinary);
 

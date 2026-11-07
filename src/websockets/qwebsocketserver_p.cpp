@@ -1,5 +1,6 @@
 // Copyright (C) 2016 Kurt Pattyn <pattyn.kurt@gmail.com>.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:critical reason:network-protocol
 
 #include "qwebsocketserver.h"
 #include "qwebsocketserver_p.h"
@@ -72,8 +73,8 @@ void QWebSocketServerPrivate::init()
                              });
             QObject::connect(pSslServer, &QSslServer::sslErrors, q,
                              [q](QSslSocket *socket, const QList<QSslError> &errors) {
-                                    Q_UNUSED(socket);
                                     Q_EMIT q->sslErrors(errors);
+                                    Q_EMIT q->sslErrorsOccurred(socket, errors);
                              });
             QObject::connect(pSslServer, &QSslServer::preSharedKeyAuthenticationRequired, q,
                              [q](QSslSocket *socket,
@@ -404,7 +405,6 @@ void QWebSocketServerPrivate::onNewConnection()
     while (m_pTcpServer->hasPendingConnections()) {
         QTcpSocket *pTcpSocket = m_pTcpServer->nextPendingConnection();
         Q_ASSERT(pTcpSocket);
-        startHandshakeTimeout(pTcpSocket);
         handleConnection(pTcpSocket);
     }
 }
@@ -418,8 +418,11 @@ void QWebSocketServerPrivate::onSocketDisconnected()
     QObject *sender = q->sender();
     if (Q_LIKELY(sender)) {
         QTcpSocket *pTcpSocket = qobject_cast<QTcpSocket*>(sender);
-        if (Q_LIKELY(pTcpSocket))
+        if (Q_LIKELY(pTcpSocket)) {
             pTcpSocket->deleteLater();
+            m_error = QWebSocketProtocol::CloseCode::CloseCodeNormal;
+            m_errorString = QString();
+        }
     }
 }
 
@@ -529,6 +532,9 @@ void QWebSocketServerPrivate::handshakeReceived()
             setError(QWebSocketProtocol::CloseCodeProtocolError,
                      QWebSocketServer::tr("Invalid response received."));
         }
+    } else {
+        setError(QWebSocketProtocol::CloseCodeProtocolError,
+                 QWebSocketServer::tr("Invalid handshake request."));
     }
     if (!success) {
         pTcpSocket->close();
@@ -538,6 +544,8 @@ void QWebSocketServerPrivate::handshakeReceived()
 void QWebSocketServerPrivate::handleConnection(QTcpSocket *pTcpSocket) const
 {
     if (Q_LIKELY(pTcpSocket)) {
+        startHandshakeTimeout(pTcpSocket);
+
         // Use a queued connection because a QSslSocket needs the event loop to process incoming
         // data. If not queued, data is incomplete when handshakeReceived is called.
         QObjectPrivate::connect(pTcpSocket, &QTcpSocket::readyRead,
@@ -555,7 +563,7 @@ void QWebSocketServerPrivate::handleConnection(QTcpSocket *pTcpSocket) const
     }
 }
 
-void QWebSocketServerPrivate::startHandshakeTimeout(QTcpSocket *pTcpSocket)
+void QWebSocketServerPrivate::startHandshakeTimeout(QTcpSocket *pTcpSocket) const
 {
     if (m_handshakeTimeout < 0)
         return;
